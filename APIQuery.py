@@ -64,18 +64,10 @@ _LIMIT_PRICE_DIFF_ = 0.5
 _STOP_LOSS_PRICE_DIFF_ = 1.5
 
 # constant variables for price checking and trading:
-#tradeVol = (availablecapital/GDAXPrice())
-#_TRADE_VOLUME_ = tradeVol
 posTradePriceGap = 1.2
 negTradePriceGap = -1.2
 tradeCounter = 0
 madeTrade = False
-
-#def __init__ (key,secret,conn):
-    # better and more secure to use k.load_key('path to txt file with key')
-    #self.key = vLpfAS8iwTrZ8G1iifZzHi9jJ4FtnPFgJPj606l2gQG/JufNub+POY9c
-    #self.secret = 'hTafJRP8ON8+uqRR6B1Jn5XraoqR8U+q7/x7cF4MVGLhUJOfBDnh3LRnBo0imKhQoSqxkldhGv3DzPLvKNCsOg=='
-    #self.conn = c
 
 def krakenPrice():
     firstPrice_Kraken = k.query_public(_DEPTH_, {_PAIR_: kcurr, _COUNT_: _COUNT_VALUE_})
