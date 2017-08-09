@@ -64,8 +64,8 @@ _LIMIT_PRICE_DIFF_ = 0.5
 _STOP_LOSS_PRICE_DIFF_ = 1.5
 
 # constant variables for price checking and trading:
-tradeVol = (availablecapital/GDAXPrice())
-_TRADE_VOLUME_ = tradeVol
+#tradeVol = (availablecapital/GDAXPrice())
+#_TRADE_VOLUME_ = tradeVol
 posTradePriceGap = 1.2
 negTradePriceGap = -1.2
 tradeCounter = 0
@@ -88,7 +88,7 @@ def GDAXPrice():
     orderbook = GDAXpublic_client.get_product_order_book(gcurr, level=1)
     #this probably won't work but worth a short
     bestbid = float(orderbook[_BIDS_][0][0])
-    bestask = float(orderbook[_ASKS][0][0])
+    bestask = float(orderbook[_ASKS_][0][0])
     return (bestask+bestbid)/2
 
 #def bitfinexPrice():
@@ -169,17 +169,17 @@ def stop_loss_trade(direction,price,trade_volume):
                                  # 'validate': 'True'
                                   })
 
-def make_trade(direction):
+def make_trade(direction,volume):
     if direction == _BUY_:
         opp_direction = _SELL_
     else: # Must be _SELL_
         opp_direction = _BUY_
 
-    mainposition = main_position_trade(direction,krakenPrice(),_TRADE_VOLUME_)
+    mainposition = main_position_trade(direction,krakenPrice(),volume)
     # order that position should close at
-    closeposition = close_position_trade(opp_direction,GDAXPrice(),_TRADE_VOLUME_)
+    closeposition = close_position_trade(opp_direction,GDAXPrice(),volume)
     # stop loss that expires in 10 mins after placed
-    stoploss = stop_loss_trade(opp_direction,krakenPriceAvg,_TRADE_VOLUME_)
+    stoploss = stop_loss_trade(opp_direction,krakenPriceAvg,volujme)
 
     mainTXID = mainposition[_RESULT_][_TXID_][0]
     closeTXID = closeposition[_RESULT_][_TXID_][0]
@@ -192,7 +192,7 @@ def closeExtraOrders():
     if stoplossTXID != '' and checkStopLoss():
         k.query_private(_CANCEL_ORDER_, {closeTXID})
 
-def makeTrade():
+def makeTrade(volume):
 
     # gets Kraken and GDAX price, then computes difference. If difference #
     # is above the threshhold to trade, then makes use of either posTrade #
@@ -202,19 +202,20 @@ def makeTrade():
     if kraken_minus_gdax() <= negTradePriceGap and positionsClosed():
         #tradeCounter+=1
         print('Making trade...')
-        print(make_trade(_BUY_))
+        print(make_trade(_BUY_,volume))
         madeTrade = True
     elif kraken_minus_gdax() >= posTradePriceGap and positionsClosed():
         #tradeCounter+=1
-        print(make_trade(_SELL_))
+        print(make_trade(_SELL_,volume))
         madeTrade = True
 
     # -TODO- print PNL after order is closed
 
 if __name__ == '__main__':
+    _TRADE_VOLUME_ = (availablecapital/GDAXPrice())
     while True:
         print('Price Difference: ' + str(kraken_minus_gdax()))
-        makeTrade()
+        makeTrade(_TRADE_VOLUME_)
         closeExtraOrders()
         if madeTrade == True:
             print('Trade #' + tradeCounter + ' has been made')
