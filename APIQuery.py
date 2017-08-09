@@ -20,7 +20,13 @@ GDAXpublic_client = gdax.PublicClient()
 # initialization:
 kcurr = 'XETHZUSD'
 gcurr = 'ETH-USD'
-availablecapital = 300
+availablecapital = 100
+
+# transaction IDs for closing extra trades:
+mainTXID = ''
+closeTXID = ''
+stoplossTXID = ''
+
 
 #def __init__ (key,secret,conn):
     # better and more secure to use k.load_key('path to txt file with key')
@@ -29,7 +35,7 @@ availablecapital = 300
     #self.conn = c
 
 def krakenPrice():
-    firstPrice_Kraken = k.query_public('Depth', {'pair': kcurr, 'count': '4'})
+    firstPrice_Kraken = k.query_public('Depth', {'pair': kcurr, 'count': '10'})
     #get ask and bid, average and return number
     bestbid = float(firstPrice_Kraken['result']['XETHZUSD']['bids'][0][0])
     bestask = float(firstPrice_Kraken['result']['XETHZUSD']['asks'][0][0])
@@ -48,8 +54,8 @@ def GDAXPrice():
 # constant variables for price checking and trading:
 avgExchangesPrice = GDAXPrice()
 tradeVol = (availablecapital/avgExchangesPrice)
-posTradePriceGap = 5
-negTradePriceGap = -5
+posTradePriceGap = 1.2
+negTradePriceGap = -1.2
 tradeCounter = 0
 madeTrade = False
 
@@ -60,7 +66,9 @@ def realPriceGap():
 def positionsClosed():
 # potential better/safer way to do this is to get trade ID from ledger, then      #
 # check if position with that ID is closed. However would cost 2 pts instead of 0 #
-    if (len(k.query_private('OpenPositions')['result']) == 0):
+    if (mainTXID == ''):
+        return True
+    elif (len(k.query_private('OpenPositions')['result']) == 0):
         noPositions = True
         return noPositions
 
@@ -70,10 +78,6 @@ def gapDirection():
     elif realPriceGap() <= negTradePriceGap:
         return 0 # kraken lower than GDAX, so buy long
 
-# transaction IDs for closing extra trades:
-mainTXID = ''
-closeTXID = ''
-stoplossTXID = ''
 
 def checkClose():
     order = k.query_private('QueryOrders', {'txid': closeTXID})
@@ -97,7 +101,7 @@ def posTrade():
                                   'price': (krakenPriceAvg + .5),
                                   'volume': (tradeVol),
                                   'leverage': 4 })
-    mainTXID = mainposition['results']['txid'][0]
+    mainTXID = mainposition['result']['txid'][0]
     # order that position should close at
     closeposition = k.query_private('AddOrder', {'pair': 'ETHUSD',
                                                  'type': 'sell',
@@ -105,7 +109,7 @@ def posTrade():
                                                  'price': avgExchangesPrice,
                                                  'volume': tradeVol,
                                                  'leverage': 4 })
-    closeTXID = closeposition['results']['txid'][0]
+    closeTXID = closeposition['result']['txid'][0]
     # stop loss that expires in 10 mins after placed
     stoploss = k.query_private('AddOrder', { 'pair': 'ETHUSD',
                                   'type': 'sell',
@@ -114,20 +118,22 @@ def posTrade():
                                   'price2': (krakenPriceAvg - 1.5),
                                   'volume': tradeVol,
                                   'leverage': 4,
-                                  'expiretm': '+<600>',
+                                  'expiretm': '+600',
                                  # 'validate': 'True'
                                   })
-    stoplossTXID = stoploss['results']['txid'][0]
+    mainTXID = mainposition['result']['txid'][0]
+    closeTXID = closeposition['result']['txid'][0]
+    stoplossTXID = stoploss['result']['txid'][0]
 
 def negTrade():
     # short at best-ish Kraken price
     mainposition = k.query_private('AddOrder', { 'pair': 'ETHUSD',
                                   'type': 'sell',
                                   'ordertype': 'limit',
-                                  'price': (krakenPriceAvg - .5),
+                                  'price': (krakenPrice() - .5),
                                   'volume': (tradeVol),
                                   'leverage': 4 })
-    mainTXID = mainposition['results']['txid'][0]
+
     # order that position should close at
     closeposition = k.query_private('AddOrder', {'pair': 'ETHUSD',
                                                  'type': 'buy',
@@ -135,19 +141,21 @@ def negTrade():
                                                  'price': avgExchangesPrice,
                                                  'volume': tradeVol,
                                                  'leverage': 4 })
-    closeTXID = closeposition['results']['txid'][0]
+
     # stop loss that expires in 10 mins after placed
     stoploss = k.query_private('AddOrder', { 'pair': 'ETHUSD',
                                   'type': 'buy',
                                   'ordertype': 'stop-loss-limit',
-                                  'price': (krakenPriceAvg + 1.5),
-                                  'price2': (krakenPriceAvg + 1.5),
+                                  'price': (krakenPrice() + 1.5),
+                                  'price2': (krakenPrice() + 1.5),
                                   'volume': tradeVol,
                                   'leverage': 4,
-                                  'expiretm': '+<600>',
+                                  'expiretm': '+600',
                                  # 'validate': 'True'
                                   })
-    stoplossTXID = stoploss['results']['txid'][0]
+    mainTXID = mainposition['result']['txid'][0]
+    closeTXID = closeposition['result']['txid'][0]
+    stoplossTXID = stoploss['result']['txid'][0]
 
 def closeExtraOrders():
     #checks if position has closed, and cancels other open order
@@ -164,24 +172,23 @@ def makeTrade():
     # is above the threshhold to trade, then makes use of either posTrade #
     # or negTrade to open a position with stop loss and a closing price   #
 
-    if (gapDirection() == 0 & positionsClosed() == True):
-        tradeCounter+=1
+    if ((gapDirection() == 0) & (positionsClosed() == True)):
+        #tradeCounter+=1
         print('Making trade...')
         print(posTrade())
         madeTrade = True
     elif (gapDirection() == 1 & positionsClosed() == True):
-        tradeCounter+=1
+        #tradeCounter+=1
         print(negTrade())
         madeTrade = True
 
     # -TODO- print PNL after order is closed
 
 if __name__ == '__main__':
-    # put it together
     while True:
         print('Price Difference: ' + str(realPriceGap()))
         makeTrade()
         closeExtraOrders()
         if madeTrade == True:
             print('Trade #' + tradeCounter + ' has been made')
-        time.sleep(3)
+        time.sleep(4)
